@@ -4,43 +4,53 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 import json
 
-# --- 1. เชื่อมต่อระบบ ---
+# --- 1. เชื่อมต่อระบบ (ใช้กุญแจจาก Secrets) ---
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-try:
-    info = json.loads(st.secrets["gcp_service_account"]["json_data"])
-    creds = Credentials.from_service_account_info(info, scopes=scope)
-    gc = gspread.authorize(creds)
-
-    # --- 2. ตั้งค่าหน้าเว็บ ---
-    st.set_page_config(page_title="TP2025 Dashboard", layout="wide")
-    st.sidebar.title("🚀 เมนูหลัก")
-    page = st.sidebar.radio("เลือกหน้าที่จะดู:", ["📊 วิเคราะห์ยอดขาย", "📦 สต็อกสินค้าคงเหลือ"])
-
-    if page == "📊 วิเคราะห์ยอดขาย":
-        st.title("📊 ระบบวิเคราะห์ยอดขาย ทีพี2025")
-        sh = gc.open("ทีพี2025")
+def get_data(sheet_name):
+    try:
+        info = json.loads(st.secrets["gcp_service_account"]["json_data"])
+        creds = Credentials.from_service_account_info(info, scopes=scope)
+        gc = gspread.authorize(creds)
+        sh = gc.open(sheet_name)
         worksheet = sh.get_worksheet(0)
         
-        # แก้ปัญหา Duplicates: ดึงข้อมูลมาเป็นลิสต์ก่อนแล้วเลือกแค่ 5 คอลัมน์แรก
-        all_values = worksheet.get_all_values()
-        df = pd.DataFrame(all_values[1:], columns=all_values[0])
-        df = df.iloc[:, 0:5] # บังคับเอาแค่คอลัมน์ A ถึง E
+        # ดึงข้อมูลและจัดการปัญหาช่องว่าง/คอลัมน์ซ้ำ
+        data = worksheet.get_all_values()
+        if not data:
+            return pd.DataFrame()
         
-        st.dataframe(df, use_container_width=True)
+        # สร้าง DataFrame และเลือกเฉพาะคอลัมน์ที่มีข้อมูลจริง (A-E)
+        df = pd.DataFrame(data[1:], columns=data[0])
+        df = df.iloc[:, 0:5] 
+        return df
+    except Exception as e:
+        st.error(f"เชื่อมต่อไฟล์ {sheet_name} ไม่สำเร็จ: {e}")
+        return pd.DataFrame()
 
-    elif page == "📦 สต็อกสินค้าคงเหลือ":
-        st.title("📦 ระบบตรวจสอบสต็อกสินค้าคงเหลือ")
-        sh = gc.open("สต็อกสินค้า")
-        worksheet = sh.get_worksheet(0)
-        
-        all_values = worksheet.get_all_values()
-        df = pd.DataFrame(all_values[1:], columns=all_values[0])
-        df = df.iloc[:, 0:5] # บังคับเอาแค่ 5 คอลัมน์แรกเหมือนกัน
-        
-        st.dataframe(df, use_container_width=True)
+# --- 2. หน้าตาเว็บ (แบบเดิมที่คุณชอบ) ---
+st.set_page_config(page_title="TP2025 Dashboard", layout="wide")
 
-except Exception as e:
-    st.error(f"เกิดข้อผิดพลาด: {e}")
+# เมนูข้างๆ
+st.sidebar.title("🚀 เมนูหลัก")
+page = st.sidebar.radio("เลือกหน้าที่จะดู:", ["📊 วิเคราะห์ยอดขาย", "📦 สต็อกสินค้าคงเหลือ"])
+
+if page == "📊 วิเคราะห์ยอดขาย":
+    st.title("📊 ระบบวิเคราะห์ยอดขาย ทีพี2025")
+    df_sales = get_data("ทีพี2025")
+    if not df_sales.empty:
+        st.write("### ข้อมูลยอดขายล่าสุด")
+        st.dataframe(df_sales, use_container_width=True)
+        # เพิ่มกราฟเล็กๆ ให้ดูสวยงามเหมือนเดิม
+        if "รวมเงิน" in df_sales.columns:
+            st.bar_chart(df_sales.set_index(df_sales.columns[2])["รวมเงิน"])
+
+elif page == "📦 สต็อกสินค้าคงเหลือ":
+    st.title("📦 ระบบตรวจสอบสต็อกสินค้าคงเหลือ")
+    df_stock = get_data("สต็อกสินค้า")
+    if not df_stock.empty:
+        st.write("### รายการสินค้าในสต็อก")
+        st.dataframe(df_stock, use_container_width=True)
+
 
 
