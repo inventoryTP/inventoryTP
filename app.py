@@ -5,7 +5,7 @@ import pandas as pd
 
 # 1. เชื่อมต่อ Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-creds = Credentials.from_service_account_file("key.json", scopes=scope)
+creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
 gc = gspread.authorize(creds)
 
 # ตั้งค่าหน้าเว็บ (ต้องไว้บนสุด)
@@ -108,4 +108,5 @@ try:
 
 except Exception as e:
     st.error(f"❌ เกิดข้อผิดพลาด: {e}")
+
     st.info("คำแนะนำ: ตรวจสอบว่าได้แชร์สิทธิ์ไฟล์ 'สต็อกสินค้า' ให้กับ Service Account (อีเมลใน key.json) หรือยัง?")
