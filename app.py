@@ -4,9 +4,6 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 import json
 import numpy as np
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 # --- 1. ฟังก์ชันดึงข้อมูล ---
 def get_data(spreadsheet_name, sheet_name):
@@ -19,131 +16,152 @@ def get_data(spreadsheet_name, sheet_name):
         worksheet = sh.worksheet(sheet_name)
         return pd.DataFrame(worksheet.get_all_records())
     except Exception as e:
-        st.error(f"Data Error: {e}")
+        st.error(f"Error: {e}")
         return pd.DataFrame()
 
-# --- 2. ฟังก์ชันส่งอีเมล (รหัส inventory2569) ---
-def send_email_notification(total_sales, top_products_df, low_stock_df):
-    try:
-        sender_email = "inventory7@gmail.com"
-        sender_password = "inventory2569" 
-        receiver_email = "inventory7@gmail.com"
-
-        msg = MIMEMultipart()
-        msg['From'] = sender_email
-        msg['To'] = receiver_email
-        msg['Subject'] = "Report Summary - TP2025"
-
-        top_html = top_products_df.to_html(index=False)
-        low_html = low_stock_df.to_html(index=False) if not low_stock_df.empty else "<p>No low stock items</p>"
-        
-        body = f"""
-        <html>
-        <body>
-            <h2>Report Summary - TP2025</h2>
-            <p>Total Sales: {total_sales:,.2f} THB</p>
-            <hr>
-            <h3>Top 10 Best Sellers</h3>
-            {top_html}
-            <hr>
-            <h3>Low Stock Warning (< 2)</h3>
-            {low_html}
-        </body>
-        </html>
-        """
-        msg.attach(MIMEText(body, 'html'))
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, receiver_email, msg.as_string())
-        server.quit()
-        return True
-    except Exception as e:
-        st.sidebar.error(f"Email Error: {e}")
-        return False
-
-# --- 3. ตั้งค่าหน้าเว็บและการโหลดข้อมูล ---
+# --- 2. ตั้งค่าหน้าเว็บ ---
 st.set_page_config(page_title="TP2025 Dashboard", layout="wide")
+st.sidebar.title("🚀 เมนูหลัก")
+page = st.sidebar.radio("เลือกหน้าที่จะดู:", ["📊 วิเคราะห์ยอดขาย", "📦 สต็อกสินค้าคงเหลือ"])
 
-# โหลดข้อมูลเตรียมไว้ (Global)
-df_sales_all = get_data("ทีพี2025", "แปลงข้อมูลยอดขาย")
-df_stock_all = get_data("สต็อกสินค้า", "สินค้าคงเหลือ")
+if page == "📊 วิเคราะห์ยอดขาย":
+    st.title("📊 ระบบวิเคราะห์ยอดขาย ทีพี2025")
+    df = get_data("ทีพี2025", "แปลงข้อมูลยอดขาย")
+    df_stock_ref = get_data("สต็อกสินค้า", "สินค้าคงเหลือ")
 
-st.sidebar.title("Main Menu")
-page = st.sidebar.radio("Go to:", ["Sales Analysis", "Inventory Stock"])
-
-# --- ปุ่มส่งอีเมลใน Sidebar ---
-st.sidebar.divider()
-if st.sidebar.button("Send Email Report"):
-    if not df_sales_all.empty:
-        t_val = pd.to_numeric(df_sales_all["รวมเงิน"], errors='coerce').sum()
-        q_col = "จำนวนที่สั่งซื้อ" if "จำนวนที่สั่งซื้อ" in df_sales_raw.columns else df_sales_raw.columns[3]
-        t_10 = df_sales_all.groupby(["รหัสสินค้า", "ชื่อสินค้า"])[q_col].sum().reset_index().sort_values(by=q_col, ascending=False).head(10)
-        
-        l_stock = pd.DataFrame()
-        if not df_stock_all.empty:
-            last_c = df_stock_all.columns[-1]
-            tmp = df_stock_all.copy()
-            tmp[last_c] = pd.to_numeric(tmp[last_c], errors='coerce').fillna(0)
-            l_stock = tmp[tmp[last_c] < 2]
-
-        if send_email_notification(t_val, t_10, l_stock):
-            st.sidebar.success("Email Sent!")
-    else:
-        st.sidebar.warning("No data to send")
-
-# --- หน้าที่ 1: วิเคราะห์ยอดขาย ---
-if page == "Sales Analysis":
-    st.title("Sales Analysis System TP2025")
-    df = df_sales_all.copy()
-    
     if not df.empty:
         df.columns = [str(c).strip() for c in df.columns]
+
+        # --- 🤖 ส่วนสรุปข้อมูลเดิมด้วย AI ---
+        st.markdown("### 🤖 AI Executive Summary")
+        ai_col1, ai_col2 = st.columns(2)
+        total_sales_val = pd.to_numeric(df["รวมเงิน"], errors='coerce').sum()
+        top_prod = df.groupby("ชื่อสินค้า")["จำนวนที่สั่งซื้อ"].sum().idxmax()
         
-        # AI Summary
-        st.markdown("### AI Executive Summary")
-        total_sales = pd.to_numeric(df["รวมเงิน"], errors='coerce').sum()
-        st.info(f"Total Sales: {total_sales:,.2f} THB")
+        with ai_col1:
+            st.info(f"✨ **สรุปจุดแข็ง:** สินค้าที่ได้รับความนิยมสูงสุดคือ **{top_prod}** มียอดขายรวม **{total_sales_val:,.2f} บาท**")
+        with ai_col2:
+            if not df_stock_ref.empty:
+                df_stock_ref.columns = [str(c).strip() for c in df_stock_ref.columns]
+                low_stock_items = len(df_stock_ref[pd.to_numeric(df_stock_ref.iloc[:, -1], errors='coerce') < 2])
+                st.warning(f"⚠️ **ข้อควรระวัง:** พบสินค้าสต็อกต่ำกว่าเกณฑ์ **{low_stock_items} รายการ**")
 
         st.divider()
-        # กราฟ 10 อันดับ
-        st.subheader("Top 10 Best Sellers")
+
+        # --- ส่วนแสดงสรุปเดิม (คงเดิม 100%) ---
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("📦 จำนวนรายการทั้งหมด", f"{len(df):,} รายการ")
+        with col2:
+            if "รวมเงิน" in df.columns:
+                df["รวมเงิน"] = pd.to_numeric(df["รวมเงิน"], errors='coerce').fillna(0)
+                st.metric("💰 ยอดขายรวมทั้งหมด", f"{df['รวมเงิน'].sum():,.2f} บาท")
+
+        # กราฟ 10 อันดับสินค้าขายดี (คงเดิม)
+        st.subheader("🏆 10 อันดับสินค้าที่ขายดีที่สุด")
         q_col = "จำนวนที่สั่งซื้อ" if "จำนวนที่สั่งซื้อ" in df.columns else df.columns[3]
+        m_col = "รวมเงิน" if "รวมเงิน" in df.columns else df.columns[4]
         df[q_col] = pd.to_numeric(df[q_col], errors='coerce').fillna(0)
-        chart_data = df.groupby(["รหัสสินค้า", "ชื่อสินค้า"])[q_col].sum().reset_index().sort_values(by=q_col, ascending=False).head(10)
-        chart_data["label"] = chart_data["รหัสสินค้า"].astype(str) + " - " + chart_data["ชื่อสินค้า"]
-        st.bar_chart(data=chart_data.set_index("label")[q_col])
+        df[m_col] = pd.to_numeric(df[m_col], errors='coerce').fillna(0)
+        chart_df = df.groupby(["รหัสสินค้า", "ชื่อสินค้า"]).agg({q_col: "sum", m_col: "sum"}).reset_index().sort_values(by=q_col, ascending=False).head(10)
+        chart_df["label"] = chart_df["รหัสสินค้า"] + " - " + chart_df["ชื่อสินค้า"]
+        st.bar_chart(data=chart_df.set_index("label")[q_col])
 
-        # ตารางรายวัน
-        st.subheader("Daily Sales Summary")
+        # ตารางสรุปสินค้า (คงเดิม)
+        st.subheader("📝 ตารางสรุปสินค้า")
+        summary_product = df.groupby(["รหัสสินค้า", "ชื่อสินค้า"]).agg({q_col: "sum", m_col: "sum"}).reset_index().sort_values(by=q_col, ascending=False)
+        st.dataframe(summary_product.reset_index(drop=True), use_container_width=True)
+
+        # ตารางสรุปรายวัน (คงเดิม)
+        st.subheader("📅 ตารางสรุปยอดการสั่งซื้อตามวันที่")
         date_col = "วันที่สั่งซื้อ" if "วันที่สั่งซื้อ" in df.columns else df.columns[0]
-        daily = df.groupby(date_col).size().reset_index(name="Orders")
-        st.dataframe(daily, use_container_width=True)
+        summary_date = df.groupby(date_col).size().reset_index(name="จำนวนรายการที่สั่งซื้อ")
+        summary_date['temp_date'] = pd.to_datetime(summary_date[date_col], dayfirst=True, errors='coerce')
+        summary_date = summary_date.sort_values(by='temp_date', ascending=False)
+        graph_monthly_data = summary_date.copy()
+        st.dataframe(summary_date.drop(columns=['temp_date']).reset_index(drop=True), use_container_width=True)
 
-        # AI Forecast & Links
+        # กราฟรายเดือน (คงเดิม)
         st.divider()
-        st.markdown("### AI Sales Forecast & Analysis")
-        st.write("Checking external factors...")
-        st.markdown("- [Weather Forecast (TMD)](https://www.tmd.go.th/forecast/monthly)")
-        st.markdown("- [Traffic Status (Longdo)](https://traffic.longdo.com/)")
+        st.subheader("📈 สรุปจำนวนรายการที่สั่งซื้อรายเดือน")
+        try:
+            def extract_month(date_str):
+                parts = str(date_str).split('/')
+                return parts[1] if len(parts) >= 2 else "00"
 
-# --- หน้าที่ 2: สต็อกสินค้าคงเหลือ ---
-elif page == "Inventory Stock":
-    st.title("Inventory Management System")
-    df_s = df_stock_all.copy()
-    df_v = df_sales_all.copy()
+            graph_monthly_data['เลขเดือน'] = graph_monthly_data[date_col].apply(extract_month)
+            monthly_chart = graph_monthly_data.groupby('เลขเดือน')['จำนวนรายการที่สั่งซื้อ'].sum().reset_index()
+            all_months = pd.DataFrame({
+                "เลขเดือน": [f"{i:02d}" for i in range(1, 13)],
+                "ชื่อเดือน": ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
+            })
+            final_monthly = pd.merge(all_months, monthly_chart, on="เลขเดือน", how="left").fillna(0)
+            st.bar_chart(data=final_monthly, x="ชื่อเดือน", y="จำนวนรายการที่สั่งซื้อ", use_container_width=True)
 
-    if not df_s.empty:
-        df_s.columns = [str(c).strip() for c in df_s.columns]
-        last_col = df_s.columns[-1]
-        df_s[last_col] = pd.to_numeric(df_s[last_col], errors='coerce').fillna(0)
-        
-        st.subheader("Items Needing Urgent Restock (< 2)")
-        low_items = df_s[df_s[last_col] < 2].reset_index(drop=True)
-        st.dataframe(low_items, use_container_width=True)
-        
+            # --- 🔮 ส่วน AI พยากรณ์ + วิเคราะห์เชิงลึก (ปรับปรุงใหม่) ---
+            st.markdown("### 🔮 AI Sales Forecast & Deep Reason Analysis")
+            active_data = final_monthly[final_monthly['จำนวนรายการที่สั่งซื้อ'] > 0]
+            
+            if len(active_data) >= 2:
+                x = np.arange(len(active_data))
+                y = active_data['จำนวนรายการที่สั่งซื้อ'].values
+                slope, intercept = np.polyfit(x, y, 1)
+                prediction = max(0, int(slope * len(active_data) + intercept))
+                
+                current_month_idx = int(active_data['เลขเดือน'].iloc[-1])
+                next_month_idx = (current_month_idx % 12) + 1
+                next_month_name = all_months.iloc[next_month_idx-1]['ชื่อเดือน']
+
+                # บทวิเคราะห์เชิงลึกด้านอะไหล่และสภาพแวดล้อม
+                season_deep_analysis = {
+                    4: "🚙 **วิเคราะห์อะไหล่:** เมษายนเป็นช่วงรถวิ่งระยะไกลสูงสุด ระบบระบายความร้อน หม้อน้ำ และน้ำมันหล่อลื่นจะทำงานหนักกว่าปกติ ควรสำรองอะไหล่กลุ่มสิ้นเปลืองที่เกี่ยวกับความร้อนและการขับขี่ทางไกล",
+                    5: "🌧️ **วิเคราะห์อะไหล่:** เริ่มเข้าฤดูฝน ทัศนวิสัยและการยึดเกาะถนนลดลง อะไหล่กลุ่มใบปัดน้ำฝน ระบบเบรก และยางรถยนต์จะมีแรงซื้อสูงขึ้นจากการตรวจเช็คสภาพความปลอดภัย",
+                    12: "🚩 **วิเคราะห์อะไหล่:** ช่วงเทศกาลปีใหม่ การสัญจรหนาแน่นแบบหยุดนิ่ง (Traffic Jam) ทำให้เครื่องยนต์เดินเบานาน ระบบไฟส่องสว่างและแบตเตอรี่ต้องพร้อมใช้งานเสมอ",
+                    1: "🔧 **วิเคราะห์อะไหล่:** ช่วงหลังการเดินทางไกล รถยนต์มักต้องการการซ่อมบำรุง (Maintenance) อะไหล่กลุ่มไส้กรองและของเหลวเครื่องยนต์จะมียอดสั่งซื้อคงที่ถึงสูง",
+                    6: "🛠️ **วิเคราะห์อะไหล่:** ฤดูฝนเต็มตัว ปัญหาความชื้นและน้ำขังส่งผลต่อระบบช่วงล่างและลูกปืนล้อ ควรเน้นวิเคราะห์สินค้ากลุ่มนี้เป็นพิเศษ"
+                }
+                
+                specific_reason = season_deep_analysis.get(next_month_idx, f"⚙️ **วิเคราะห์อะไหล่:** เดือน{next_month_name} เป็นช่วงการใช้งานรถยนต์ปกติ แนะนำให้เน้นอะไหล่พื้นฐานตามระยะทาง (Periodic Maintenance) และตรวจสอบเทรนด์รายสัปดาห์")
+                
+                p_col1, p_col2 = st.columns(2)
+                p_col1.metric(f"คาดการณ์ออเดอร์ในเดือน {next_month_name}", f"{prediction} รายการ")
+                
+                with p_col2:
+                    st.info(f"💡 **บทวิเคราะห์แนวโน้ม:** {'📈 ความต้องการอะไหล่มีทิศทางเพิ่มขึ้น' if slope > 0 else '📉 ตลาดอยู่ในช่วงชะลอตัวชั่วคราว'}")
+                    st.write(f"{specific_reason}")
+                    
+                    # --- ส่วนที่เพิ่มลิ้งค์อ้างอิง (ตัด Kapook ออก) ---
+                    st.markdown("---")
+                    st.markdown("**🔗 ตรวจสอบปัจจัยสัญจรและอากาศ:**")
+                    st.markdown("- [☁️ กรมอุตุนิยมวิทยา (พยากรณ์รายเดือน)](https://www.tmd.go.th/forecast/monthly)")
+                    st.markdown("- [🚗 Longdo Traffic (เช็คสภาพจราจรหนาแน่น)](https://traffic.longdo.com/)")
+            else:
+                st.info("💡 AI กำลังวิเคราะห์ความสัมพันธ์ระหว่างข้อมูลการขายและปัจจัยภายนอก...")
+        except:
+            st.info("AI กำลังรอข้อมูลเพื่อประมวลผล...")
+
+elif page == "📦 สต็อกสินค้าคงเหลือ":
+    st.title("📦 ระบบตรวจสอบสต็อกสินค้า")
+    df_stock = get_data("สต็อกสินค้า", "สินค้าคงเหลือ")
+    df_sales = get_data("ทีพี2025", "แปลงข้อมูลยอดขาย")
+    if not df_stock.empty:
+        df_stock.columns = [str(c).strip() for c in df_stock.columns]
+        last_col = df_stock.columns[-1] 
+        df_stock[last_col] = pd.to_numeric(df_stock[last_col], errors='coerce').fillna(0)
+        st.subheader("🔥 10 อันดับสินค้าขายดีที่ควรสั่งซื้อด่วน")
+        if not df_sales.empty:
+            df_sales.columns = [str(c).strip() for c in df_sales.columns]
+            q_col_sales = "จำนวนที่สั่งซื้อ" if "จำนวนที่สั่งซื้อ" in df_sales.columns else df_sales.columns[3]
+            hot_sales = df_sales.groupby("รหัสสินค้า")[q_col_sales].sum().reset_index()
+            urgent_df = pd.merge(df_stock, hot_sales, left_on=df_stock.columns[0], right_on="รหัสสินค้า", how="left")
+            urgent_df[q_col_sales] = urgent_df[q_col_sales].fillna(0)
+            urgent_list = urgent_df[urgent_df[last_col] < 2].sort_values(by=q_col_sales, ascending=False).head(10)
+            if not urgent_list.empty:
+                urgent_list["label"] = urgent_list["รหัสสินค้า"] + " (" + urgent_list.iloc[:, 1] + ")"
+                st.bar_chart(data=urgent_list.set_index("label")[last_col])
+        st.subheader("⚠️ สินค้าที่ต้องเติมด่วน (เหลือน้อยกว่า 2)")
+        low_stock = df_stock[df_stock[last_col] < 2].reset_index(drop=True)
+        st.dataframe(low_stock, use_container_width=True)
         st.divider()
-        st.subheader("All Stock Items")
-        st.dataframe(df_s, use_container_width=True)
-    else:
-        st.warning("No stock data found in Google Sheets")
+        st.subheader("📋 รายการสต็อกทั้งหมด")
+        st.dataframe(df_stock.reset_index(drop=True), use_container_width=True)
