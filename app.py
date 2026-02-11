@@ -84,7 +84,7 @@ def send_email_notification(total_sales, top_products_df, low_stock_df):
 # --- 2. ตั้งค่าหน้าเว็บ ---
 st.set_page_config(page_title="TP2025 Dashboard PRO", layout="wide")
 
-df_sales_raw = get_data("ทีพี2025", "แปลงข้อมูลยอดขาย")
+df_sales_raw = get_data("ทีพี ออโต้เซลส์", "แปลงข้อมูลยอดขาย")
 df_stock_raw = get_data("สต็อกสินค้า", "สินค้าคงเหลือ")
 
 st.sidebar.title("🚀 เมนูหลัก")
@@ -234,3 +234,4 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
 
         styled_stock = df_stock.style.applymap(color_stock, subset=[last_col])
         st.dataframe(styled_stock, use_container_width=True)
+
