@@ -1,3 +1,5 @@
+
+คุณส่ง
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
@@ -22,19 +24,28 @@ def get_data(spreadsheet_name, sheet_name):
         st.error(f"Error: {e}")
         return pd.DataFrame()
 
-# --- ฟังก์ชันส่งอีเมล (ปรับปรุงใหม่ให้ส่งไปที่ inventorytp7@gmail.com และเนื้อหาครบถ้วน) ---
+# --- ฟังก์ชันส่งอีเมล (ปรับปรุง: ลบทศนิยมในตารางเมล) ---
 def send_email_notification(total_sales, top_products_df, low_stock_df):
     try:
-        sender_email = "inventory7@gmail.com"
-        sender_password = "inventory2569" 
-        receiver_email = "inventorytp7@gmail.com" # เปลี่ยนเป็นเมลรับรายงานโดยเฉพาะ
+        sender_email = "inventorytp7@gmail.com" # แก้ไขตัวสะกดให้ถูกต้องตามที่คุณแจ้ง
+        sender_password = "rkfdpavofvurzuye" 
+        receiver_email = "inventorytp7@gmail.com"
+
+        # --- ส่วนที่ 1: ลบทศนิยมในตารางสินค้าขายดี ---
+        if not top_products_df.empty:
+            q_col = top_products_df.columns[-1]
+            top_products_df[q_col] = pd.to_numeric(top_products_df[q_col], errors='coerce').fillna(0).astype(int)
+
+        # --- ส่วนที่ 2: ลบทศนิยมในตารางสินค้าสต็อกต่ำ ---
+        if not low_stock_df.empty:
+            s_col = low_stock_df.columns[-1]
+            low_stock_df[s_col] = pd.to_numeric(low_stock_df[s_col], errors='coerce').fillna(0).astype(int)
 
         msg = MIMEMultipart()
         msg['From'] = sender_email
         msg['To'] = receiver_email
         msg['Subject'] = "📊 รายงานสรุปอัจฉริยะ - ทีพี2025"
 
-        # สร้างเนื้อหา HTML ให้สรุปข้อมูลครบทุกส่วน
         body = f"""
         <html>
         <head>
@@ -76,7 +87,6 @@ def send_email_notification(total_sales, top_products_df, low_stock_df):
 # --- 2. ตั้งค่าหน้าเว็บ ---
 st.set_page_config(page_title="TP2025 Dashboard PRO", layout="wide")
 
-# โหลดข้อมูลล่วงหน้าเพื่อให้เข้าถึงได้ทั้ง Sidebar และ Main Page
 df_sales_raw = get_data("ทีพี2025", "แปลงข้อมูลยอดขาย")
 df_stock_raw = get_data("สต็อกสินค้า", "สินค้าคงเหลือ")
 
@@ -87,23 +97,18 @@ page = st.sidebar.radio("เลือกหน้าที่จะดู:", ["�
 st.sidebar.divider()
 if st.sidebar.button("📩 ส่งรายงานสรุปเข้าอีเมล"):
     if not df_sales_raw.empty:
-        # 1. คำนวณยอดเงินรวม
         t_val = pd.to_numeric(df_sales_raw["รวมเงิน"], errors='coerce').sum()
-        
-        # 2. จัดการข้อมูลสินค้าขายดี 10 อันดับ
         q_col = "จำนวนที่สั่งซื้อ" if "จำนวนที่สั่งซื้อ" in df_sales_raw.columns else df_sales_raw.columns[3]
         top_10_data = df_sales_raw.groupby(["รหัสสินค้า", "ชื่อสินค้า"])[q_col].sum().reset_index().sort_values(by=q_col, ascending=False).head(10)
         
-        # 3. กรองสินค้าที่สต็อกต่ำกว่า 2
-        last_col_idx = df_stock_raw.columns[-1]
-        low_stock_data = df_stock_raw[pd.to_numeric(df_stock_raw[last_col_idx], errors='coerce') < 2].copy()
+        last_col_name = df_stock_raw.columns[-1]
+        low_stock_data = df_stock_raw[pd.to_numeric(df_stock_raw[last_col_name], errors='coerce') < 2].copy()
         
-        # แสดง Spinner ระหว่างส่ง
         with st.spinner('กำลังส่งรายงาน...'):
             if send_email_notification(t_val, top_10_data, low_stock_data):
-                st.sidebar.success("✅ ส่งเมลไปยัง inventorytp7@gmail.com สำเร็จ!")
+                st.sidebar.success("✅ ส่งเมลสำเร็จ!")
             else:
-                st.sidebar.error("❌ ส่งเมลไม่สำเร็จ ตรวจสอบ App Password")
+                st.sidebar.error("❌ ส่งเมลไม่สำเร็จ")
     else:
         st.sidebar.warning("ไม่พบข้อมูลสำหรับส่ง")
 
@@ -115,8 +120,6 @@ if page == "📊 วิเคราะห์ยอดขาย":
 
     if not df.empty:
         df.columns = [str(c).strip() for c in df.columns]
-
-        # --- 🤖 ส่วนสรุปข้อมูลเดิมด้วย AI ---
         st.markdown("### 🤖 AI Executive Summary")
         ai_col1, ai_col2 = st.columns(2)
         total_sales_val = pd.to_numeric(df["รวมเงิน"], errors='coerce').sum()
@@ -132,7 +135,6 @@ if page == "📊 วิเคราะห์ยอดขาย":
 
         st.divider()
 
-        # --- ส่วนแสดงสรุปเดิม ---
         col1, col2 = st.columns(2)
         with col1:
             st.metric("📦 จำนวนรายการทั้งหมด", f"{len(df):,} รายการ")
@@ -140,7 +142,6 @@ if page == "📊 วิเคราะห์ยอดขาย":
             df["รวมเงิน"] = pd.to_numeric(df["รวมเงิน"], errors='coerce').fillna(0)
             st.metric("💰 ยอดขายรวมทั้งหมด", f"{df['รวมเงิน'].sum():,.2f} บาท")
 
-        # --- 📊 FEATURE 3: Sales Heatmap (ปฏิทินยอดขาย/วันในสัปดาห์) ---
         st.subheader("📊 Sales Day-of-Week Analysis (มือขึ้นวันไหน?)")
         date_col = "วันที่สั่งซื้อ" if "วันที่สั่งซื้อ" in df.columns else df.columns[0]
         df['dt'] = pd.to_datetime(df[date_col], dayfirst=True, errors='coerce')
@@ -152,7 +153,6 @@ if page == "📊 วิเคราะห์ยอดขาย":
         heatmap_data['วัน'] = heatmap_data['วัน'].map(day_thai)
         st.bar_chart(data=heatmap_data.set_index('วัน'))
 
-        # กราฟ 10 อันดับสินค้าขายดี (คงเดิม)
         st.subheader("🏆 10 อันดับสินค้าที่ขายดีที่สุด")
         q_col = "จำนวนที่สั่งซื้อ" if "จำนวนที่สั่งซื้อ" in df.columns else df.columns[3]
         m_col = "รวมเงิน" if "รวมเงิน" in df.columns else df.columns[4]
@@ -161,9 +161,11 @@ if page == "📊 วิเคราะห์ยอดขาย":
         chart_df["label"] = chart_df["รหัสสินค้า"] + " - " + chart_df["ชื่อสินค้า"]
         st.bar_chart(data=chart_df.set_index("label")[q_col])
 
-        # ตารางสรุปสินค้า & รายวัน (คงเดิม)
         st.subheader("📝 ตารางสรุปสินค้า")
-        st.dataframe(chart_df.drop(columns=['label']).reset_index(drop=True), use_container_width=True)
+        # ลบทศนิยมก่อนแสดงตาราง
+        chart_df_display = chart_df.drop(columns=['label']).reset_index(drop=True)
+        chart_df_display[q_col] = chart_df_display[q_col].astype(int)
+        st.dataframe(chart_df_display, use_container_width=True)
 
         st.subheader("📅 ตารางสรุปยอดการสั่งซื้อตามวันที่")
         summary_date = df.groupby(date_col).size().reset_index(name="จำนวนรายการที่สั่งซื้อ")
@@ -171,7 +173,6 @@ if page == "📊 วิเคราะห์ยอดขาย":
         summary_date = summary_date.sort_values(by='temp_date', ascending=False)
         st.dataframe(summary_date.drop(columns=['temp_date']).reset_index(drop=True), use_container_width=True)
 
-        # กราฟรายเดือน & AI Forecast (คงเดิม 100%)
         st.divider()
         st.subheader("📈 สรุปจำนวนรายการที่สั่งซื้อรายเดือน")
         try:
@@ -189,6 +190,7 @@ if page == "📊 วิเคราะห์ยอดขาย":
                 slope, intercept = np.polyfit(x_idx, y_val, 1)
                 next_month = all_months.iloc[int(active_data['เลขเดือน'].iloc[-1]) % 12]['ชื่อเดือน']
                 st.metric(f"คาดการณ์ออเดอร์เดือน {next_month}", f"{max(0, int(slope * len(active_data) + intercept))} รายการ")
+                # แก้ไขบรรทัดที่มีปัญหา Syntax Error (ลบ emoji 🗝️ ออก)
                 st.markdown("- [☁️ กรมอุตุฯ](https://www.tmd.go.th/forecast/monthly) | [🚗 Longdo Traffic](https://traffic.longdo.com/)")
         except: st.info("AI กำลังประมวลผล...")
 
@@ -201,13 +203,11 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
     if not df_stock.empty:
         df_stock.columns = [str(c).strip() for c in df_stock.columns]
         last_col = df_stock.columns[-1] 
-        df_stock[last_col] = pd.to_numeric(df_stock[last_col], errors='coerce').fillna(0)
+        # ลบทศนิยมตั้งแต่ตอนประมวลผลสต็อก
+        df_stock[last_col] = pd.to_numeric(df_stock[last_col], errors='coerce').fillna(0).astype(int)
 
-        # --- 💡 FEATURE 1: Smart Inventory Insight (วิเคราะห์มูลค่าและจุดคุ้มทุน) ---
         st.markdown("### 💡 Smart Inventory Insight")
         ins1, ins2 = st.columns(2)
-        # สมมติราคาต้นทุนเฉลี่ยคือ 60% ของราคาขาย (เนื่องจากไม่มีข้อมูลต้นทุนในชีต)
-        # หรือถ้ามีคอลัมน์ราคาในชีตสต็อก สามารถนำมาคูณได้เลย
         total_items = df_stock[last_col].sum()
         with ins1:
             st.info(f"📦 ปริมาณสินค้าในมือทั้งหมด: {total_items:,.0f} ชิ้น")
@@ -216,7 +216,6 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
 
         st.divider()
 
-        # 🔥 10 อันดับสินค้าขายดี (คงเดิม)
         st.subheader("🔥 10 อันดับสินค้าขายดีที่ควรสั่งซื้อด่วน")
         if not df_sales.empty:
             df_sales.columns = [str(c).strip() for c in df_sales.columns]
@@ -228,11 +227,9 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
                 urgent_list["label"] = urgent_list.iloc[:, 0].astype(str) + " (" + urgent_list.iloc[:, 1] + ")"
                 st.bar_chart(data=urgent_list.set_index("label")[last_col])
 
-        # ⚠️ สินค้าต้องเติมด่วน (คงเดิม)
         st.subheader("⚠️ สินค้าที่ต้องเติมด่วน (เหลือน้อยกว่า 2)")
         st.dataframe(df_stock[df_stock[last_col] < 2].reset_index(drop=True), use_container_width=True)
 
-        # --- 🔔 FEATURE 2: Visual Alerts (แถบสีแจ้งเตือนในตาราง) ---
         st.subheader("📋 รายการสต็อกทั้งหมด (ระบบสีแจ้งเตือน)")
         
         def color_stock(val):
@@ -241,7 +238,5 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
             else: color = '#e5ffcc' # เขียวอ่อน
             return f'background-color: {color}'
 
-        # แสดงตารางพร้อมใส่สีในคอลัมน์จำนวนคงเหลือ
         styled_stock = df_stock.style.applymap(color_stock, subset=[last_col])
         st.dataframe(styled_stock, use_container_width=True)
-
