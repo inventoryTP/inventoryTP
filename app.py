@@ -53,14 +53,54 @@ st.sidebar.title("🚀 เมนูหลัก")
 page = st.sidebar.radio("เลือกหน้าที่จะดู:", ["📊 วิเคราะห์ยอดขาย", "📦 สต็อกสินค้าคงเหลือ"])
 
 # --- ปุ่มส่งอีเมลใน Sidebar ---
-st.sidebar.divider()
-if st.sidebar.button("📩 ส่งรายงานสรุปเข้าอีเมล"):
-    if not df_sales_raw.empty:
-        t_val = pd.to_numeric(df_sales_raw["รวมเงิน"], errors='coerce').sum()
-        q_col = "จำนวนที่สั่งซื้อ" if "จำนวนที่สั่งซื้อ" in df_sales_raw.columns else df_sales_raw.columns[3]
-        top_10 = df_sales_raw.groupby(["รหัสสินค้า", "ชื่อสินค้า"])[q_col].sum().reset_index().head(10)
-        if send_email_notification(t_val, top_10, df_stock_raw[pd.to_numeric(df_stock_raw.iloc[:, -1], errors='coerce') < 2]):
-            st.sidebar.success("ส่งเมลสำเร็จ!")
+def send_email_notification(total_sales, top_products_df, low_stock_df):
+    try:
+        sender_email = "inventory7@gmail.com"
+        sender_password = "inventory2569" 
+        receiver_email = "inventorytp7@gmail.com"
+
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = receiver_email
+        msg['Subject'] = "📊 รายงานสรุปยอดขายและสต็อก - ทีพี2025"
+
+        # สร้างเนื้อหาอีเมลแบบ HTML
+        body = f"""
+        <html>
+        <head>
+            <style>
+                table {{ border-collapse: collapse; width: 100%; }}
+                th, td {{ border: 1px solid #dddddd; text-align: left; padding: 8px; font-family: sans-serif; }}
+                th {{ background-color: #f2f2f2; }}
+                h3 {{ color: #2E86C1; }}
+                .warning {{ color: #CB4335; }}
+            </style>
+        </head>
+        <body>
+            <h2>📊 รายงานสรุปจากระบบ ทีพี2025</h2>
+            <p style="font-size: 16px;">💰 <b>ยอดขายรวมทั้งหมด:</b> {total_sales:,.2f} บาท</p>
+            <hr>
+            <h3>🏆 10 อันดับสินค้าขายดี</h3>
+            {top_products_df.to_html(index=False)}
+            <hr>
+            <h3 class="warning">⚠️ สินค้าที่ต้องเติมด่วน (เหลือน้อยกว่า 2)</h3>
+            {low_stock_df.to_html(index=False) if not low_stock_df.empty else "<p>ไม่มีสินค้าเหลือน้อยกว่าเกณฑ์</p>"}
+            <br>
+            <p style="color: grey;">ส่งโดยระบบอัตโนมัติ TP2025 Dashboard</p>
+        </body>
+        </html>
+        """
+        msg.attach(MIMEText(body, 'html'))
+
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, receiver_email, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        st.sidebar.error(f"เกิดข้อผิดพลาดในการส่งเมล: {e}")
+        return False
 
 # --- หน้า 1: วิเคราะห์ยอดขาย ---
 if page == "📊 วิเคราะห์ยอดขาย":
@@ -199,3 +239,4 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
         # แสดงตารางพร้อมใส่สีในคอลัมน์จำนวนคงเหลือ
         styled_stock = df_stock.style.applymap(color_stock, subset=[last_col])
         st.dataframe(styled_stock, use_container_width=True)
+
