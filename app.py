@@ -22,25 +22,56 @@ def get_data(spreadsheet_name, sheet_name):
         st.error(f"Error: {e}")
         return pd.DataFrame()
 
-# --- ฟังก์ชันส่งอีเมล (เพิ่มเติมจากรอบก่อนหน้า) ---
+# --- ฟังก์ชันส่งอีเมล (ปรับปรุงใหม่ให้ส่งไปที่ inventorytp7@gmail.com และเนื้อหาครบถ้วน) ---
 def send_email_notification(total_sales, top_products_df, low_stock_df):
     try:
         sender_email = "inventory7@gmail.com"
         sender_password = "inventory2569" 
-        receiver_email = "inventory7@gmail.com"
+        receiver_email = "inventorytp7@gmail.com" # เปลี่ยนเป็นเมลรับรายงานโดยเฉพาะ
+
         msg = MIMEMultipart()
         msg['From'] = sender_email
         msg['To'] = receiver_email
         msg['Subject'] = "📊 รายงานสรุปอัจฉริยะ - ทีพี2025"
-        body = f"<html><body><h2>สรุปยอดขาย: {total_sales:,.2f} บาท</h2><h3>สินค้าเหลือน้อย:</h3>{low_stock_df.to_html()}</body></html>"
+
+        # สร้างเนื้อหา HTML ให้สรุปข้อมูลครบทุกส่วน
+        body = f"""
+        <html>
+        <head>
+            <style>
+                table {{ border-collapse: collapse; width: 100%; font-family: sans-serif; }}
+                th, td {{ border: 1px solid #dddddd; text-align: left; padding: 8px; }}
+                th {{ background-color: #f2f2f2; }}
+                h2 {{ color: #2E86C1; }}
+                .sales {{ font-size: 18px; font-weight: bold; color: #28B463; }}
+                .warning {{ font-size: 18px; font-weight: bold; color: #CB4335; }}
+            </style>
+        </head>
+        <body>
+            <h2>📊 สรุปรายงานประจำวัน ทีพี2025</h2>
+            <p class="sales">💰 ยอดขายรวมทั้งหมด: {total_sales:,.2f} บาท</p>
+            <hr>
+            <h3>🏆 10 อันดับสินค้าขายดีที่สุด</h3>
+            {top_products_df.to_html(index=False)}
+            <hr>
+            <h3 class="warning">⚠️ รายการสินค้าต้องเติมด่วน (เหลือน้อยกว่า 2 ชิ้น)</h3>
+            {low_stock_df.to_html(index=False) if not low_stock_df.empty else "<p>ไม่มีสินค้าเหลือน้อยกว่าเกณฑ์</p>"}
+            <br>
+            <p style="color: grey;">ส่งโดยระบบอัตโนมัติ TP2025 Dashboard PRO</p>
+        </body>
+        </html>
+        """
         msg.attach(MIMEText(body, 'html'))
+
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, receiver_email, msg.as_string())
         server.quit()
         return True
-    except: return False
+    except Exception as e:
+        st.sidebar.error(f"เกิดข้อผิดพลาด: {e}")
+        return False
 
 # --- 2. ตั้งค่าหน้าเว็บ ---
 st.set_page_config(page_title="TP2025 Dashboard PRO", layout="wide")
@@ -56,11 +87,25 @@ page = st.sidebar.radio("เลือกหน้าที่จะดู:", ["�
 st.sidebar.divider()
 if st.sidebar.button("📩 ส่งรายงานสรุปเข้าอีเมล"):
     if not df_sales_raw.empty:
+        # 1. คำนวณยอดเงินรวม
         t_val = pd.to_numeric(df_sales_raw["รวมเงิน"], errors='coerce').sum()
+        
+        # 2. จัดการข้อมูลสินค้าขายดี 10 อันดับ
         q_col = "จำนวนที่สั่งซื้อ" if "จำนวนที่สั่งซื้อ" in df_sales_raw.columns else df_sales_raw.columns[3]
-        top_10 = df_sales_raw.groupby(["รหัสสินค้า", "ชื่อสินค้า"])[q_col].sum().reset_index().head(10)
-        if send_email_notification(t_val, top_10, df_stock_raw[pd.to_numeric(df_stock_raw.iloc[:, -1], errors='coerce') < 2]):
-            st.sidebar.success("ส่งเมลสำเร็จ!")
+        top_10_data = df_sales_raw.groupby(["รหัสสินค้า", "ชื่อสินค้า"])[q_col].sum().reset_index().sort_values(by=q_col, ascending=False).head(10)
+        
+        # 3. กรองสินค้าที่สต็อกต่ำกว่า 2
+        last_col_idx = df_stock_raw.columns[-1]
+        low_stock_data = df_stock_raw[pd.to_numeric(df_stock_raw[last_col_idx], errors='coerce') < 2].copy()
+        
+        # แสดง Spinner ระหว่างส่ง
+        with st.spinner('กำลังส่งรายงาน...'):
+            if send_email_notification(t_val, top_10_data, low_stock_data):
+                st.sidebar.success("✅ ส่งเมลไปยัง inventorytp7@gmail.com สำเร็จ!")
+            else:
+                st.sidebar.error("❌ ส่งเมลไม่สำเร็จ ตรวจสอบ App Password")
+    else:
+        st.sidebar.warning("ไม่พบข้อมูลสำหรับส่ง")
 
 # --- หน้า 1: วิเคราะห์ยอดขาย ---
 if page == "📊 วิเคราะห์ยอดขาย":
@@ -199,3 +244,4 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
         # แสดงตารางพร้อมใส่สีในคอลัมน์จำนวนคงเหลือ
         styled_stock = df_stock.style.applymap(color_stock, subset=[last_col])
         st.dataframe(styled_stock, use_container_width=True)
+
