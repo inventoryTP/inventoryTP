@@ -234,5 +234,3 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
 
         styled_stock = df_stock.style.applymap(color_stock, subset=[last_col])
         st.dataframe(styled_stock, use_container_width=True)
-ส่งแล้ว
-เขียนถึง Farhana Jehnum Cps
