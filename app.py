@@ -1,5 +1,3 @@
-
-คุณส่ง
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
@@ -27,16 +25,15 @@ def get_data(spreadsheet_name, sheet_name):
 # --- ฟังก์ชันส่งอีเมล (ปรับปรุง: ลบทศนิยมในตารางเมล) ---
 def send_email_notification(total_sales, top_products_df, low_stock_df):
     try:
-        sender_email = "inventorytp7@gmail.com" # แก้ไขตัวสะกดให้ถูกต้องตามที่คุณแจ้ง
-        sender_password = "rkfdpavofvurzuye" 
+        sender_email = "inventorytp7@gmail.com" 
+        sender_password = "rkfdpavofvurzuye" # รหัส 16 หลักที่คุณเพิ่งสร้าง
         receiver_email = "inventorytp7@gmail.com"
 
-        # --- ส่วนที่ 1: ลบทศนิยมในตารางสินค้าขายดี ---
+        # ปรับตัวเลขในตารางให้ไม่มีทศนิยมก่อนส่งเมล
         if not top_products_df.empty:
             q_col = top_products_df.columns[-1]
             top_products_df[q_col] = pd.to_numeric(top_products_df[q_col], errors='coerce').fillna(0).astype(int)
 
-        # --- ส่วนที่ 2: ลบทศนิยมในตารางสินค้าสต็อกต่ำ ---
         if not low_stock_df.empty:
             s_col = low_stock_df.columns[-1]
             low_stock_df[s_col] = pd.to_numeric(low_stock_df[s_col], errors='coerce').fillna(0).astype(int)
@@ -142,7 +139,7 @@ if page == "📊 วิเคราะห์ยอดขาย":
             df["รวมเงิน"] = pd.to_numeric(df["รวมเงิน"], errors='coerce').fillna(0)
             st.metric("💰 ยอดขายรวมทั้งหมด", f"{df['รวมเงิน'].sum():,.2f} บาท")
 
-        st.subheader("📊 Sales Day-of-Week Analysis (มือขึ้นวันไหน?)")
+        st.subheader("📊 Sales Day-of-Week Analysis")
         date_col = "วันที่สั่งซื้อ" if "วันที่สั่งซื้อ" in df.columns else df.columns[0]
         df['dt'] = pd.to_datetime(df[date_col], dayfirst=True, errors='coerce')
         df['วัน'] = df['dt'].dt.day_name()
@@ -162,7 +159,6 @@ if page == "📊 วิเคราะห์ยอดขาย":
         st.bar_chart(data=chart_df.set_index("label")[q_col])
 
         st.subheader("📝 ตารางสรุปสินค้า")
-        # ลบทศนิยมก่อนแสดงตาราง
         chart_df_display = chart_df.drop(columns=['label']).reset_index(drop=True)
         chart_df_display[q_col] = chart_df_display[q_col].astype(int)
         st.dataframe(chart_df_display, use_container_width=True)
@@ -190,7 +186,6 @@ if page == "📊 วิเคราะห์ยอดขาย":
                 slope, intercept = np.polyfit(x_idx, y_val, 1)
                 next_month = all_months.iloc[int(active_data['เลขเดือน'].iloc[-1]) % 12]['ชื่อเดือน']
                 st.metric(f"คาดการณ์ออเดอร์เดือน {next_month}", f"{max(0, int(slope * len(active_data) + intercept))} รายการ")
-                # แก้ไขบรรทัดที่มีปัญหา Syntax Error (ลบ emoji 🗝️ ออก)
                 st.markdown("- [☁️ กรมอุตุฯ](https://www.tmd.go.th/forecast/monthly) | [🚗 Longdo Traffic](https://traffic.longdo.com/)")
         except: st.info("AI กำลังประมวลผล...")
 
@@ -203,7 +198,6 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
     if not df_stock.empty:
         df_stock.columns = [str(c).strip() for c in df_stock.columns]
         last_col = df_stock.columns[-1] 
-        # ลบทศนิยมตั้งแต่ตอนประมวลผลสต็อก
         df_stock[last_col] = pd.to_numeric(df_stock[last_col], errors='coerce').fillna(0).astype(int)
 
         st.markdown("### 💡 Smart Inventory Insight")
@@ -233,10 +227,12 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
         st.subheader("📋 รายการสต็อกทั้งหมด (ระบบสีแจ้งเตือน)")
         
         def color_stock(val):
-            if val < 2: color = '#ffcccc' # แดงอ่อน
-            elif val < 5: color = '#ffe5cc' # ส้มอ่อน
-            else: color = '#e5ffcc' # เขียวอ่อน
+            if val < 2: color = '#ffcccc'
+            elif val < 5: color = '#ffe5cc'
+            else: color = '#e5ffcc'
             return f'background-color: {color}'
 
         styled_stock = df_stock.style.applymap(color_stock, subset=[last_col])
         st.dataframe(styled_stock, use_container_width=True)
+ส่งแล้ว
+เขียนถึง Farhana Jehnum Cps
