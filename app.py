@@ -41,7 +41,7 @@ def send_email_notification(total_sales, top_products_df, low_stock_df):
         msg = MIMEMultipart()
         msg['From'] = sender_email
         msg['To'] = receiver_email
-        msg['Subject'] = "📊 รายงานสรุปอัจฉริยะ - ทีพี2025"
+        msg['Subject'] = "📊 รายงานสรุปอัจฉริยะ - ทีพี ออโต้เซลส์"
 
         body = f"""
         <html>
@@ -234,6 +234,7 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
 
         styled_stock = df_stock.style.applymap(color_stock, subset=[last_col])
         st.dataframe(styled_stock, use_container_width=True)
+
 
 
 
