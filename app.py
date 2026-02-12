@@ -20,11 +20,11 @@ def check_password():
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        st.title("🔒 ระบบล็อคข้อมูล ทีพี ออโต้เซลล์")
+        st.title("🔒 ระบบล็อคข้อมูล ทีพี ออโต้เซลส์")
         st.text_input("กรุณาใส่รหัสผ่านเพื่อเข้าสู่ Dashboard", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
-        st.title("🔒 ระบบล็อคข้อมูล ทีพี ออโต้เซลล์")
+        st.title("🔒 ระบบล็อคข้อมูล ทีพี ออโต้เซลส์")
         st.text_input("รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่", type="password", on_change=password_entered, key="password")
         st.error("❌ รหัสผ่านผิด กรุณาติดต่อผู้ดูแลระบบ")
         return False
@@ -260,3 +260,4 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
 
         styled_stock = df_stock.style.applymap(color_stock, subset=[last_col])
         st.dataframe(styled_stock, use_container_width=True)
+
