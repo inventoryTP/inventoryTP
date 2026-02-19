@@ -9,11 +9,11 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ==========================================
-# 🔒 ส่วนระบบล็อกอิน (เพิ่มเข้าไปใหม่)
+# 🔒 ส่วนระบบล็อกอิน
 # ==========================================
 def check_password():
     def password_entered():
-        if st.session_state["password"] == "2569": # 👈 แก้ไขรหัสผ่านตรงนี้
+        if st.session_state["password"] == "1234": # 👈 แก้ไขรหัสผ่านตรงนี้
             st.session_state["password_correct"] = True
             del st.session_state["password"] 
         else:
@@ -31,7 +31,7 @@ def check_password():
     return True
 
 if not check_password():
-    st.stop() # หยุดการทำงานทันทีถ้าไม่มีรหัสผ่าน
+    st.stop()
 # ==========================================
 
 # --- 1. ฟังก์ชันดึงข้อมูล ---
@@ -48,14 +48,13 @@ def get_data(spreadsheet_name, sheet_name):
         st.error(f"Error: {e}")
         return pd.DataFrame()
 
-# --- ฟังก์ชันส่งอีเมล (ปรับปรุง: ลบทศนิยมในตารางเมล) ---
+# --- ฟังก์ชันส่งอีเมล ---
 def send_email_notification(total_sales, top_products_df, low_stock_df):
     try:
         sender_email = "inventorytp7@gmail.com" 
-        sender_password = "rkfdpavofvurzuye" # รหัส 16 หลักที่คุณเพิ่งสร้าง
+        sender_password = "rkfdpavofvurzuye" 
         receiver_email = "inventorytp7@gmail.com"
 
-        # ปรับตัวเลขในตารางให้ไม่มีทศนิยมก่อนส่งเมล
         if not top_products_df.empty:
             q_col = top_products_df.columns[-1]
             top_products_df[q_col] = pd.to_numeric(top_products_df[q_col], errors='coerce').fillna(0).astype(int)
@@ -86,7 +85,7 @@ def send_email_notification(total_sales, top_products_df, low_stock_df):
             <p class="sales">💰 ยอดขายรวมทั้งหมด: {total_sales:,.2f} บาท</p>
             <hr>
             <h3>🏆 10 อันดับสินค้าขายดีที่สุด</h3>
-            {top_products_df.to_html(index=False)}
+            {top_products_df.head(10).to_html(index=False)}
             <hr>
             <h3 class="warning">⚠️ รายการสินค้าต้องเติมด่วน (เหลือน้อยกว่า 2 ชิ้น)</h3>
             {low_stock_df.to_html(index=False) if not low_stock_df.empty else "<p>ไม่มีสินค้าเหลือน้อยกว่าเกณฑ์</p>"}
@@ -122,13 +121,13 @@ if st.sidebar.button("📩 ส่งรายงานสรุปเข้า�
     if not df_sales_raw.empty:
         t_val = pd.to_numeric(df_sales_raw["รวมเงิน"], errors='coerce').sum()
         q_col = "จำนวนที่สั่งซื้อ" if "จำนวนที่สั่งซื้อ" in df_sales_raw.columns else df_sales_raw.columns[3]
-        top_10_data = df_sales_raw.groupby(["รหัสสินค้า", "ชื่อสินค้า"])[q_col].sum().reset_index().sort_values(by=q_col, ascending=False).head(10)
+        top_data = df_sales_raw.groupby(["รหัสสินค้า", "ชื่อสินค้า"])[q_col].sum().reset_index().sort_values(by=q_col, ascending=False)
         
         last_col_name = df_stock_raw.columns[-1]
         low_stock_data = df_stock_raw[pd.to_numeric(df_stock_raw[last_col_name], errors='coerce') < 2].copy()
         
         with st.spinner('กำลังส่งรายงาน...'):
-            if send_email_notification(t_val, top_10_data, low_stock_data):
+            if send_email_notification(t_val, top_data, low_stock_data):
                 st.sidebar.success("✅ ส่งเมลสำเร็จ!")
             else:
                 st.sidebar.error("❌ ส่งเมลไม่สำเร็จ")
@@ -180,14 +179,19 @@ if page == "📊 วิเคราะห์ยอดขาย":
         q_col = "จำนวนที่สั่งซื้อ" if "จำนวนที่สั่งซื้อ" in df.columns else df.columns[3]
         m_col = "รวมเงิน" if "รวมเงิน" in df.columns else df.columns[4]
         df[q_col] = pd.to_numeric(df[q_col], errors='coerce').fillna(0)
-        chart_df = df.groupby(["รหัสสินค้า", "ชื่อสินค้า"]).agg({q_col: "sum", m_col: "sum"}).reset_index().sort_values(by=q_col, ascending=False).head(10)
-        chart_df["label"] = chart_df["รหัสสินค้า"] + " - " + chart_df["ชื่อสินค้า"]
-        st.bar_chart(data=chart_df.set_index("label")[q_col])
+        
+        # ส่วนเตรียมข้อมูลทั้งหมด
+        all_chart_df = df.groupby(["รหัสสินค้า", "ชื่อสินค้า"]).agg({q_col: "sum", m_col: "sum"}).reset_index().sort_values(by=q_col, ascending=False)
+        
+        # กราฟแสดงแค่ 10 อันดับเพื่อให้ดูง่าย
+        top_10_chart = all_chart_df.head(10).copy()
+        top_10_chart["label"] = top_10_chart["รหัสสินค้า"] + " - " + top_10_chart["ชื่อสินค้า"]
+        st.bar_chart(data=top_10_chart.set_index("label")[q_col])
 
-        st.subheader("📝 ตารางสรุปสินค้า")
-        chart_df_display = chart_df.drop(columns=['label']).reset_index(drop=True)
-        chart_df_display[q_col] = chart_df_display[q_col].astype(int)
-        st.dataframe(chart_df_display, use_container_width=True)
+        st.subheader("📝 ตารางสรุปสินค้าทั้งหมด")
+        # แสดงผลข้อมูลทั้งหมดในตารางตามที่ต้องการ
+        all_chart_df[q_col] = all_chart_df[q_col].astype(int)
+        st.dataframe(all_chart_df.reset_index(drop=True), use_container_width=True)
 
         st.subheader("📅 ตารางสรุปยอดการสั่งซื้อตามวันที่")
         summary_date = df.groupby(date_col).size().reset_index(name="จำนวนรายการที่สั่งซื้อ")
