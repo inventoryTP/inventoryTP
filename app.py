@@ -13,7 +13,7 @@ from email.mime.multipart import MIMEMultipart
 # ==========================================
 def check_password():
     def password_entered():
-        if st.session_state["password"] == "1234": # 👈 แก้ไขรหัสผ่านตรงนี้
+        if st.session_state["password"] == "2569": # 👈 แก้ไขรหัสผ่านตรงนี้
             st.session_state["password_correct"] = True
             del st.session_state["password"] 
         else:
@@ -264,3 +264,4 @@ elif page == "📦 สต็อกสินค้าคงเหลือ":
 
         styled_stock = df_stock.style.applymap(color_stock, subset=[last_col])
         st.dataframe(styled_stock, use_container_width=True)
+
